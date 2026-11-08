@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# ABOUTME: Entrypoint for the LLM Council, safe to invoke through a symlink.
+# ABOUTME: Resolves the real project root and dispatches to the Python package.
+
+set -euo pipefail
+
+# Resolve this script through any chain of symlinks so PROJECT_ROOT is the real
+# checkout rather than the directory the symlink happens to live in.
+target="${BASH_SOURCE[0]}"
+while [ -L "$target" ]; do
+  link="$(readlink "$target")"
+  case "$link" in
+    /*) target="$link" ;;
+    *)  target="$(dirname "$target")/$link" ;;
+  esac
+done
+PROJECT_ROOT="$(cd "$(dirname "$target")/.." && pwd)"
+
+export PYTHONPATH="$PROJECT_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m council "$@"
