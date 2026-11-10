@@ -1,0 +1,30 @@
+# ABOUTME: An app whose API listens only on loopback, and a Caddy sidecar that can reach it.
+# ABOUTME: The sidecar shares the app's network namespace, so its 127.0.0.1 is the app's.
+
+services:
+  # The stand-in for the real app. Its API listens on 127.0.0.1:8080 and nowhere else.
+  app:
+    image: python:3-alpine
+    command: python /app/server.py
+    volumes:
+      - ./app:/app:ro
+    environment:
+      API_TOKEN: ${API_TOKEN:?Set API_TOKEN in .env. See .env.example.}
+    restart: unless-stopped
+    ports:
+      # The proxy's port, published here because the network namespace is the app's.
+      # The API's own port, 8080, is never published.
+      - "${HOST_ADDRESS:-127.0.0.1}:8081:8081"
+
+  api-proxy:
+    image: caddy:2-alpine
+    # Share the app's network namespace. This takes the service name, not the container name.
+    network_mode: "service:app"
+    command: caddy reverse-proxy --from :8081 --to 127.0.0.1:8080
+    depends_on:
+      app:
+        condition: service_started
+        # Restart the sidecar when Compose replaces the app's container. Without
+        # this it keeps the old container's network, which no longer exists.
+        restart: true
+    restart: unless-stopped
